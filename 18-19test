@@ -1,0 +1,53 @@
+library(pROC)
+library(glmnet)
+library(randomForest)
+library(mlbench)
+data(Sonar) 
+N = nrow(Sonar)
+P = ncol(Sonar)-1
+M = 150
+set.seed(1)
+mdata = Sonar[sample(1:N),]
+itrain = sample(1:N,M)
+x = mdata[,-ncol(mdata)]
+y = mdata$Class
+xm = as.matrix(x)
+
+set.seed(1)
+#optimise the LASSO for the training set
+lasso.opt = cv.glmnet(xm[itrain,],y[itrain],alpha=1, family='binomial')
+#lasso.opt$lambda[which.min(lasso.opt$lambda)]
+lasso.opt$lambda.min
+
+
+#(3)
+lasso.mod=glmnet(xm[itrain,],y[itrain],alpha=1,family='binomial',lambda=lasso.opt$lambda.min)
+coef(lasso.mod)
+
+#(4)
+library(tree)
+tree.mod=tree(y~.,data=x,subset=itrain)
+summary(tree.mod)
+length(summary(tree.mod)$used)
+
+#(5)
+rf.mod=randomForest(y~.,data=x,subset=itrain,importance=TRUE)
+importance(rf.mod)
+varImpPlot(rf.mod)
+
+#(6)
+tree.pre=predict(tree.mod,x[-itrain,],'class')
+(tb1=table(tree.pre,y[-itrain]))
+
+rf.pre=predict(rf.mod,x[-itrain,],'class')
+(tb2=table(rf.pre,y[-itrain]))
+
+1-sum(diag(tb1))/sum(tb1)
+1-sum(diag(tb2))/sum(tb2)
+
+#(7)
+tree.p=predict(tree.mod,x[-itrain,],'vector')[,2]
+rf.p=predict(rf.mod,x[-itrain,],'prob')[,2]
+auc.tree=roc(y[-itrain],tree.p)$auc
+auc.rf=roc(y[-itrain],rf.p)$auc
+c(auc.tree,auc.rf)
