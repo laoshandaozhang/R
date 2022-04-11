@@ -1,0 +1,158 @@
+########################
+# question 1
+########################
+
+rm(list=ls())
+
+M = 100
+set.seed(4061)
+dat = iris[sample(1:nrow(iris)),]
+dat[,1:4] = apply(dat[,1:4],2,scale)
+itrain = sample(1:nrow(iris), M)
+
+#(a)
+class(dat)
+library(tree)
+tree.mod=tree(Species~.,data=dat[itrain,],split='gini')
+summary(tree.mod)
+summary(tree.mod)$used
+plot(tree.mod)
+text(tree.mod,pretty=0)
+
+#(b)
+pdf(file='Fig1.pdf')
+par(font=2,mar=c(1,1,1,1))
+plot(tree.mod,col='navy')
+text(tree.mod,pretty=NULL)
+dev.off()
+
+#(c)
+par(mfrow=c(2,2))
+for(k in 1:4){
+  boxplot(dat[,k]~dat[,5],col='pink',main=paste(names(dat[k])))
+}
+
+#(e)
+tree.pred=predict(tree.mod,dat[-itrain,],type='class')
+(tb=table(tree.pred,dat[-itrain,5]))
+1-sum(diag(tb)/sum(tb))
+
+#(f)
+cv.out=cv.tree(tree.mod,FUN=prune.misclass)
+plot(cv.out$size,cv.out$dev,pch=20)
+min=which.min(cv.out$dev)
+size=cv.out$size[min]
+size
+ptree=prune.tree(tree.mod,best=size)
+plot(ptree)
+text(ptree)
+
+#(g)
+rf.mod=randomForest(Species~.,dat[itrain,])
+(tb2=rf.mod$confusion)
+rf.mod
+
+#(h)
+rf.pred=predict(rf.mod,dat[-itrain,],type='class')
+(tb3=table(rf.pred,dat[-itrain,5]))
+1-sum(diag(tb3))/sum(tb3)
+1-sum(diag(tb)/sum(tb))
+
+########################
+# question 2
+########################
+
+rm(list=ls())
+
+dat = model.matrix(Apps~., College)[,-1]
+dat <- apply(dat,2,scale)
+set.seed(4061)
+itrain = sample(1:nrow(dat), 500)
+
+View(dat)
+View(College$Apps)#regression problem
+
+#(b)
+set.seed(4061)
+lasso.cv=cv.glmnet(dat[itrain,],College$Apps[itrain],alpha=1)
+lasso.model.cv=glmnet(dat[itrain,],College$Apps[itrain],alpha=1,lambda=lasso.cv$lambda.min)
+coef(lasso.model.cv)
+
+#(c)
+ytest=College$Apps[-itrain]
+lasso.pred=predict(lasso.model.cv,dat[-itrain,])
+sqrt(mean((lasso.pred-ytest)^2))
+cor(ytest,lasso.pred)
+plot(ytest,lasso.pred)
+abline(a=0,b=1)
+
+#(d)
+set.seed(4061)
+rf.mod5=randomForest(dat[itrain,],College$Apps[itrain],mtry=5)
+rf.mod15=randomForest(dat[itrain,],College$Apps[itrain],mtry=15)
+sqrt(mean((rf.mod5$predicted-rf.mod5$y)^2))
+sqrt(mean((rf.mod15$predicted-rf.mod15$y)^2))
+#?randomForest
+
+#(e)
+pred15=predict(rf.mod15,dat[-itrain,])
+sqrt(mean((pred15-ytest)^2))
+
+########################
+# question 3
+########################
+
+rm(list=ls())
+
+x = Smarket[,-9]
+y = Smarket$Direction
+set.seed(4061)
+train = sample(1:nrow(Smarket),1000)
+
+#(a)
+rf.mod=randomForest(x[train,],y[train])
+#View(x)
+summary(rf.mod)
+#??rf.mod$confusion
+
+#(b)
+rf.pred=predict(rf.mod,x[-train,],"prob")
+rf.roc=roc(pred=rf.pred[,1],resp=y[-train])
+rf.roc$auc
+plot(rf.roc)
+
+#(c)
+k.knn=2
+kmod=knn(train=x[train,],test=x[-train,],cl=y[train],k=k.knn,prob=T)
+(tb=table(kmod,y[-train]))
+kopp=attributes(kmod)$prob
+kmod.roc=roc(response=y[-train],predictor=kopp)
+kmod.roc$auc
+plot(kmod.roc)
+
+#(d)
+set.seed(4061)
+M = 1000
+train = sample(1:nrow(Smarket), M)
+
+kn=numeric(10)
+for(i in 1:10){
+  km=knn(train=x[train,],test=x[-train,],cl=y[train],k=i,prob=T)
+  tb=table(km,y[-train])
+  kn[i]=sum(diag(tb))/sum(tb)
+}
+kn
+plot(kn,t='b')
+
+set.seed(4061)
+M = 1000
+train = sample(1:nrow(Smarket), M)
+
+knno=numeric(10)
+for(i in c(1:10)){
+  km=knn(x[train,],x[-train,],cl=y[train],k=i)
+  tb=table(km,y[-train])
+  knno[i]=sum(diag(tb))/sum(tb)
+}
+kn
+plot(knno,t='b')
