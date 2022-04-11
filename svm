@@ -1,0 +1,12 @@
+SVM核函数：
+1 linear：只能解决线性可分问题
+2 ploy：依靠升维使原本线性不可分的数据变得线性可分
+3 rbf：可以映射到无限维，但容易过拟合
+
+特征维数高选linear
+样本多，特征少选高斯
+样本很多选linear
+
+https://blog.csdn.net/WB18002337539/article/details/107299409?spm=1001.2101.3001.6650.1&utm_medium=distribute.pc_relevant.none-task-blog-2%7Edefault%7ECTRLIST%7ERate-1.pc_relevant_aa&depth_1-utm_source=distribute.pc_relevant.none-task-blog-2%7Edefault%7ECTRLIST%7ERate-1.pc_relevant_aa&utm_relevant_index=2
+
+https://blog.csdn.net/dd_wl1/article/details/122014121
