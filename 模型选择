@@ -1,0 +1,178 @@
+rm(list=ls())
+library("ISLR")
+#View(College)
+#predict Apps
+set.seed(4061)
+#divide training set with 600 samples, and the other 177 samples are the testing set
+train=(0:600)
+training_set = College[train,]
+test=(-train)
+testing_set = College[(-train),]
+
+#regression model
+model=lm(log(Apps)~.,data=training_set)
+
+#subset selection(exhaustive search)
+library(leaps)
+regfit.full=regsubsets(log(Apps)~.,data=training_set,nvmax = 17,method = "exhaustive")
+summary(regfit.full)
+
+reg.summary=summary(regfit.full)
+plot(reg.summary$adjr2,xlab="number of variables",type="b",ylab="adjr2")
+which.max(reg.summary$adjr2)
+#can not use r2, must use adjr2
+plot(regfit.full,scale="adjr2")
+
+
+plot(regfit.full,scale="bic")
+coef(regfit.full,id=12)
+plot(regfit.full,scale="Cp")
+
+
+#subset selection using test-validation
+train_cv=sample(1:nrow(training_set),nrow(training_set)*3/4)
+regfit.best=regsubsets(log(Apps)~.,data=training_set[train_cv,],nvmax=17)
+test.mat=model.matrix(log(Apps)~.,data=training_set[-train_cv,])
+val.errors=rep(NA,17)#a list include 17 NAs to save val.errors
+
+for(i in 1:17){
+  coefi=coef(regfit.best,id=i)
+  pred=test.mat[,names(coefi)]%*%coefi
+  val.errors[i]=mean((log(training_set$Apps)[-train_cv]-pred)^2)
+}
+
+plot(1:17,val.errors,xlab="Number of Predictors",
+     ylab="Validation Set Error",type='b')
+which.min(val.errors)
+#is 16. means to use 16 variables to run the model
+
+coefi = coef(regfit.full,which.min(val.errors))#shows which 16 para
+test.mat=model.matrix(log(Apps)~.,data=testing_set)
+pred=test.mat[,names(coefi)]%*%coefi
+mean((log(testing_set$Apps)-pred)^2)
+
+
+#subset selection using 10-fold cross-validation
+#add the sample number to increase the accuracy
+library(leaps)
+
+predict.regsubsets = function(object, newdata, id, ...){
+  form = as.formula(object$call[[2]])
+  coefi = coef(object, id)
+  test.mat = model.matrix(form, newdata)
+  pred = test.mat[ , names(coefi)]%*%coefi
+  return(pred)
+}
+
+k=10
+folds=sample(1:k,nrow(training_set),replace=TRUE)
+out.cv = matrix(0, nrow = k, ncol = 17)#create a matrix: 10x17
+colnames(out.cv)=1:17
+
+for (j in 1:k) {
+  best.fit=regsubsets(log(Apps)~.,data=training_set[folds!=j,],nvmax=17)
+  for (i in 1:17) {
+    pred = predict.regsubsets(best.fit, training_set[folds == j, ], i)
+    MSE = mean((log(training_set$Apps)[folds == j] - pred)^2)
+    out.cv[j, i] = MSE
+  }
+}
+out.cv
+cv.MSE = apply(out.cv, 2, mean)
+which.min(apply(out.cv, 2, mean))
+#each 10 values to calculate the mean
+#according to the column to calculate the mean value
+plot(1:17,cv.MSE,xlab="Number of Predictors",
+     ylab="10-fold Validation Set Error",type='b')
+
+m = which.min(cv.MSE)
+coef(regfit.full,m)
+
+reg.full.train=regsubsets(log(Apps)~.,data=training_set,nvmax=17)
+pred = predict.regsubsets(reg.full.train,newdata = testing_set,id=m)
+mean((pred-log(testing_set$Apps))^2)
+
+
+#----------------------------------------------------
+#shrinkage method (Lasso regression)
+gridLambda=10^seq(5,-2,length=100)
+train_x=model.matrix(log(Apps)~.,training_set)
+test_x=model.matrix(log(Apps)~.,testing_set)
+train_y=log(training_set$Apps)
+
+library(glmnet)
+lasso.mod=cv.glmnet(train_x,train_y,alpha=1,lambda=gridLambda)
+
+#best value of lambda, then calculate coefficient
+bestlam=lasso.mod$lambda.min
+predict(lasso.mod,s=bestlam,type="coefficients")
+
+#calculate test MSE
+lasso.pred=predict(lasso.mod,s=bestlam,newx=test_x)
+mean((lasso.pred-log(testing_set$Apps))^2)
+
+#----------------------------------
+#dimention reduction
+#PCR: first PCA, then regression
+library(pls)
+set.seed(1)
+pcr.fit <- pcr(log(Apps)~.,data=training_set,scale=TRUE,validation="CV")
+summary(pcr.fit)
+validationplot(pcr.fit,val.type="MSEP",ylim= c(0.2,0.4))
+predict(pcr.fit,newdata = training_set,ncomp=15)#15 is the minimum
+
+#test MSE of PCR
+pcr.fit11=pcr(log(Apps)~.,data=training_set,scale=TRUE)
+pcr.pred=predict(pcr.fit11,testing_set,ncomp=15)
+mean((pcr.pred-log(testing_set$Apps))^2)
+
+#PLSR
+pls.fit=plsr(log(Apps)~., data=training_set,scale=TRUE,
+             validation="CV")
+validationplot(pls.fit,val.type="MSEP",ylim= c(0.25,0.4))
+
+#test MSE of PLSR
+pls.fit11=plsr(log(Apps)~.,data=training_set,scale=TRUE)
+pls.pred=predict(pls.fit11,testing_set,ncomp=4)
+mean((pls.pred-log(testing_set$Apps))^2)
+
+
+
+线性模型特征选择
+原因：假设x变量有1000个，用这些直接去拟合模型，会造成过拟合；而且很难保证这些变量都相互独立->多重共线性
+
+三种方法：
+1 子集选择 subset selection (前后全) 
+2 shrinkage method: lasso & ridge
+3 dimension deduction: PCR & PLS
+
+step函数是以AIC为评价标准进行模型选择的。
+
+lasso: lambda: tuning para: 0～infinity
+等于0时，就是原始回归模型
+等于无穷时，beta为y的均值
+lasso处理稀疏型数据更好
+
+ridge是包含所有变量的 
+
+存在分类型变量的时候，lasso和ridge无法处理。要处理成数值型变量
+用model.matrix(Balance~., data=Credit)
+Balance为y变量 (写出什么是y变量就行)
+
+虽然与最优子集选择相比，向前逐步选择在运算效率上的优势很明显，但它无法保证找到的模型是所有2^p个模型中最优的。因为每一个模型都要包含前一个模型里的所有变量。选择：CP最小，AIC最小，BIC最小；调整R2最大。
+当一小部分预测变量是真实有效的而其他预测变量系数非常小或等于零时，lasso更为出色；当响应变量是很多预测变量的函数且这些变量系数大致相等时，岭回归更出色（岭回归包含所有变量）。
+
+降维方法：
+主成分分析PCA
+在第一主成分的方向上，数据变化最大。即如果把观测投影到这个方向上，投影方差最大。第二主成分更接近零表示它携带较少的信息。
+
+regsubset()建立一系列包含给定数目预测变量的最优模型
+
+回归问题 y为定量变量
+分类问题 y为定性变量
+
+boostrap可以用来衡量一个指定的估计量或不确定的因素。
+
+估计量的标准差为x，那么，对于总体的一个随机样本，可以认为平均上差距大致为x。
+
+基尼系数衡量节点纯度。如果较小，意味着某个节点包含的观测值几乎都来自同一类别。互熵值也是。
